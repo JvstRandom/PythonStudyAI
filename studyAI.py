@@ -1,3 +1,7 @@
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
 def calculate_success_rate(study_time, break_time, user_prefs):
     """
     Success if study session matches user's preferred pattern.
@@ -9,6 +13,16 @@ def calculate_success_rate(study_time, break_time, user_prefs):
     deviation = abs(break_time - expected_break) + abs(study_time - expected_focus)
     success = max(0, 100 - deviation)
     return success
+
+def calculate_success_rate2(study_time, break_time, plan_study, plan_break):
+    """
+    Success if study session matches user's input everytime the user logged in.
+    """
+    # success drops if user breaks earlier or studies far longer than planned
+    deviation = abs(plan_break - break_time) + abs(plan_study - study_time)
+    success = max(0, 100 - deviation)
+    return success
+
 def calculate_focus_rate(study_time, distractions_time, user_prefs):
     """
     Focus = (time actually spent focusing) / (total intended time)
@@ -80,3 +94,48 @@ def calculate_progress_score(
     )
 
     return round(progress_score * 100, 2)  # percentage
+
+@app.route("/calculate", methods=["POST"])
+def calculate():
+    data = request.json
+    user_prefs = data["user_prefs"]
+
+    success1 = calculate_success_rate(data["study_time"], data["break_time"], user_prefs)
+    success2 = calculate_success_rate2(data["study_time"], data["break_time"], data["plan_study"], data["plan_break"])
+    focus = calculate_focus_rate(data["study_time"], data["distractions_time"], user_prefs)
+    stress = calculate_stress(data["daily_study"], user_prefs)
+    consistency = calculate_consistency(data["days_logged_in"], data["total_days"])
+
+    progress = calculate_progress_score(
+        data["primary_goal"],
+        consistency_rate=consistency,
+        success_rate=success1 / 100,
+        focus_rate=focus / 100,
+        stress_rate=(100 - stress) / 100
+    )
+
+    return jsonify({
+        "success_rate_pref": success1,
+        "success_rate_plan": success2,
+        "focus_rate": focus,
+        "stress_rate": stress,
+        "consistency": round(consistency * 100, 2),
+        "progress_score": progress
+    })
+
+@app.route('/calculate_test')
+def calculate_test():
+    sample = {
+        "study_time": 80,
+        "break_time": 20,
+        "plan_study": 90,
+        "plan_break": 30
+    }
+    return jsonify(calculate_success_rate2(80, 20,90, 30))
+
+if __name__ == "__main__":
+    app.run(debug=True)
+
+
+
+
